@@ -6,8 +6,20 @@ import (
 	"strings"
 
 	"github.com/ServiceWeaver/weaver"
+	"github.com/ServiceWeaver/weaver/metrics"
 	"golang.org/x/exp/slices"
 )
+
+var ( 
+	cacheHits = metrics.NewCounter( 
+		"search_cache_hits", 
+		"Number of Search cache hits", 
+	) 
+	cacheMisses = metrics.NewCounter( 
+		"search_cache_misses", 
+		"Number of Search cache misses", 
+	) 
+) 
 
 type Searcher interface {
 	Search(context.Context, string) ([]string, error)
@@ -24,7 +36,10 @@ func (s *searcher) Search(ctx context.Context, query string) ([]string, error) {
 	if emojis, err := s.cache.Get().Get(ctx, query); err != nil {
 		s.Logger(ctx).Error("cache.Get", "query", query, "err", err)
 	} else if len(emojis) > 0 {
+		cacheHits.Add(1) 
 		return emojis, nil
+	} else {
+		cacheMisses.Add(1)
 	}
 
 	words := strings.Fields(strings.ToLower(query))
@@ -39,7 +54,7 @@ func (s *searcher) Search(ctx context.Context, query string) ([]string, error) {
 	if err := s.cache.Get().Put(ctx, query, results); err != nil { 
 		s.Logger(ctx).Error("cache.Put", "query", query, "err", err) 
 	} 
-	
+
 	return results, nil
 }
 
